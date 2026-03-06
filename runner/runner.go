@@ -80,6 +80,7 @@ import (
 
 // Runner is a client for running the enumeration process.
 type Runner struct {
+	seenMux sync.Mutex
 	options            *Options
 	hp                 *httpx.HTTPX
 	wappalyzer         *wappalyzer.Wappalyze
@@ -675,6 +676,9 @@ func (r *Runner) classifyPage(headlessBody, body string, pHash uint64) map[strin
 }
 
 func (r *Runner) testAndSet(k string) bool {
+	r.seenMux.Lock()
+	defer r.seenMux.Unlock()
+
 	// skip empty lines
 	k = strings.TrimSpace(k)
 	if k == "" {
