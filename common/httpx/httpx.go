@@ -224,11 +224,11 @@ get_response:
 	}
 
 	var shouldIgnoreErrors, shouldIgnoreBodyErrors bool
-	switch {
-	case h.Options.Unsafe && req.Method == http.MethodHead && !stringsutil.ContainsAny(err.Error(), "i/o timeout"):
+	if h.Options.Unsafe && req.Method == http.MethodHead && err != nil &&
+		!stringsutil.ContainsAny(err.Error(), "i/o timeout") {
 		shouldIgnoreErrors = true
 		shouldIgnoreBodyErrors = true
-	}
+	 }
 
 	var resp Response
 	resp.Input = req.Host
