@@ -228,7 +228,7 @@ get_response:
 		!stringsutil.ContainsAny(err.Error(), "i/o timeout") {
 		shouldIgnoreErrors = true
 		shouldIgnoreBodyErrors = true
-	 }
+	}
 
 	var resp Response
 	resp.Input = req.Host
