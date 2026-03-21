@@ -148,7 +148,9 @@ func extractDomainsFromJS(script string, domains, fqdns map[string]struct{}, inp
 	if err != nil {
 		return
 	}
-	defer func() { recover() }()
+	defer func() {
+		_ = recover()
+	}()
 	walkProgram(program, func(value string) {
 		for _, match := range potentialDomainsCompiled.FindAllStringSubmatch(value, -1) {
 			if len(match) >= 2 {
