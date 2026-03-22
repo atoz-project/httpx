@@ -76,7 +76,7 @@ func startTLSServer(t *testing.T) (string, func() *capturedHello) {
 	ln, err := tls.Listen("tcp", "127.0.0.1:0", tlsCfg)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		ln.Close()
+		_ = ln.Close()
 	})
 
 	go func() {
@@ -86,9 +86,11 @@ func startTLSServer(t *testing.T) (string, func() *capturedHello) {
 				return
 			}
 			go func() {
-				defer conn.Close()
+				defer func() {
+					_ = conn.Close()
+				}()
 				buf := make([]byte, 1)
-				conn.Read(buf)
+				_, _ = conn.Read(buf)
 			}()
 		}
 	}()
@@ -172,7 +174,7 @@ func TestTLSImpersonate_DefaultGoTLS(t *testing.T) {
 		impersonate.None, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 
 	hello := getHello()
 	require.NotNil(t, hello)
@@ -194,7 +196,7 @@ func TestTLSImpersonate_Random(t *testing.T) {
 		impersonate.Random, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 
 	hello := getHello()
 	require.NotNil(t, hello)
@@ -216,7 +218,7 @@ func TestTLSImpersonate_Chrome(t *testing.T) {
 		impersonate.Chrome, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 
 	hello := getHello()
 	require.NotNil(t, hello)
@@ -253,7 +255,7 @@ func TestTLSImpersonate_CustomJA3(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	conn.Close()
+	_ = conn.Close()
 
 	hello := getHello()
 	require.NotNil(t, hello)
@@ -282,7 +284,7 @@ func TestTLSImpersonate_ChromeDiffersFromDefault(t *testing.T) {
 		impersonate.None, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 	defaultHello := getHello()
 
 	// Chrome
@@ -292,7 +294,7 @@ func TestTLSImpersonate_ChromeDiffersFromDefault(t *testing.T) {
 		impersonate.Chrome, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 	chromeHello := getHello()
 
 	require.NotNil(t, defaultHello)
@@ -319,7 +321,7 @@ func TestTLSImpersonate_CustomJA3DiffersFromDefault(t *testing.T) {
 		impersonate.None, nil,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 	defaultHello := getHello()
 
 	ja3Str := "771,49195-49196,0-23-65281-10-11-35-16-5-13-18,23-24,0"
@@ -332,7 +334,7 @@ func TestTLSImpersonate_CustomJA3DiffersFromDefault(t *testing.T) {
 		strategy, identity,
 	)
 	require.NoError(t, err)
-	conn.Close()
+	_ = conn.Close()
 	customHello := getHello()
 
 	require.NotNil(t, defaultHello)
@@ -371,7 +373,7 @@ func TestTLSImpersonate_EndToEnd_HTTPX(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.NotNil(t, conn)
-			conn.Close()
+			_ = conn.Close()
 
 			if tt.strategy != "" {
 				hello := getHello()
@@ -396,7 +398,7 @@ func TestTLSImpersonate_EndToEnd_JA3(t *testing.T) {
 	conn, err := dialer(context.Background(), "tcp", addr)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	conn.Close()
+	_ = conn.Close()
 
 	hello := getHello()
 	require.NotNil(t, hello)
