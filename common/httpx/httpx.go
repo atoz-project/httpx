@@ -230,14 +230,12 @@ func (h *HTTPX) buildTLSDialer(options *Options) func(ctx context.Context, netwo
 
 func resolveImpersonateStrategy(value string) (impersonate.Strategy, *impersonate.Identity) {
 	switch strings.ToLower(value) {
-	case "", "random":
-		return impersonate.Random, nil
-	case "chrome":
+	case "", "chrome":
 		return impersonate.Chrome, nil
 	default:
 		spec, err := ja3.ParseWithJa3(value)
 		if err != nil {
-			return impersonate.Random, nil
+			return impersonate.Chrome, nil
 		}
 		identity := impersonate.Identity(*spec)
 		return impersonate.Custom, &identity

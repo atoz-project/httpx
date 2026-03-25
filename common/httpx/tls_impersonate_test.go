@@ -107,21 +107,9 @@ func startTLSServer(t *testing.T) (string, func() *capturedHello) {
 // --- Unit tests for resolveImpersonateStrategy ---
 
 func TestResolveImpersonateStrategy(t *testing.T) {
-	t.Run("empty defaults to random", func(t *testing.T) {
+	t.Run("empty defaults to chrome", func(t *testing.T) {
 		strategy, identity := resolveImpersonateStrategy("")
-		require.Equal(t, impersonate.Random, strategy)
-		require.Nil(t, identity)
-	})
-
-	t.Run("random", func(t *testing.T) {
-		strategy, identity := resolveImpersonateStrategy("random")
-		require.Equal(t, impersonate.Random, strategy)
-		require.Nil(t, identity)
-	})
-
-	t.Run("random case insensitive", func(t *testing.T) {
-		strategy, identity := resolveImpersonateStrategy("Random")
-		require.Equal(t, impersonate.Random, strategy)
+		require.Equal(t, impersonate.Chrome, strategy)
 		require.Nil(t, identity)
 	})
 
@@ -144,15 +132,15 @@ func TestResolveImpersonateStrategy(t *testing.T) {
 		require.NotNil(t, identity)
 	})
 
-	t.Run("invalid ja3 falls back to random", func(t *testing.T) {
+	t.Run("invalid ja3 falls back to chrome", func(t *testing.T) {
 		strategy, identity := resolveImpersonateStrategy("not-a-ja3-string")
-		require.Equal(t, impersonate.Random, strategy)
+		require.Equal(t, impersonate.Chrome, strategy)
 		require.Nil(t, identity)
 	})
 
-	t.Run("partial ja3 falls back to random", func(t *testing.T) {
+	t.Run("partial ja3 falls back to chrome", func(t *testing.T) {
 		strategy, identity := resolveImpersonateStrategy("771,4865")
-		require.Equal(t, impersonate.Random, strategy)
+		require.Equal(t, impersonate.Chrome, strategy)
 		require.Nil(t, identity)
 	})
 }
@@ -181,28 +169,6 @@ func TestTLSImpersonate_DefaultGoTLS(t *testing.T) {
 	require.NotEmpty(t, hello.CipherSuites, "default Go TLS should have cipher suites")
 }
 
-func TestTLSImpersonate_Random(t *testing.T) {
-	addr, getHello := startTLSServer(t)
-
-	opts := fastdialer.DefaultOptions
-	opts.EnableFallback = false
-	fd, err := fastdialer.NewDialer(opts)
-	require.NoError(t, err)
-	defer fd.Close()
-
-	conn, err := fd.DialTLSWithConfigImpersonate(
-		context.Background(), "tcp", addr,
-		&tls.Config{InsecureSkipVerify: true},
-		impersonate.Random, nil,
-	)
-	require.NoError(t, err)
-	_ = conn.Close()
-
-	hello := getHello()
-	require.NotNil(t, hello)
-	require.NotEmpty(t, hello.CipherSuites, "random impersonation should have cipher suites")
-}
-
 func TestTLSImpersonate_Chrome(t *testing.T) {
 	addr, getHello := startTLSServer(t)
 
@@ -223,7 +189,6 @@ func TestTLSImpersonate_Chrome(t *testing.T) {
 	hello := getHello()
 	require.NotNil(t, hello)
 	require.NotEmpty(t, hello.CipherSuites)
-	// Chrome 106 uses GREASE values (0xNANA pattern) as the first cipher suite
 	hasGrease := false
 	for _, cs := range hello.CipherSuites {
 		if cs&0x0f0f == 0x0a0a {
@@ -277,7 +242,6 @@ func TestTLSImpersonate_ChromeDiffersFromDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer fd.Close()
 
-	// Default (no impersonation)
 	conn, err := fd.DialTLSWithConfigImpersonate(
 		context.Background(), "tcp", addr,
 		&tls.Config{InsecureSkipVerify: true},
@@ -287,7 +251,6 @@ func TestTLSImpersonate_ChromeDiffersFromDefault(t *testing.T) {
 	_ = conn.Close()
 	defaultHello := getHello()
 
-	// Chrome
 	conn, err = fd.DialTLSWithConfigImpersonate(
 		context.Background(), "tcp", addr,
 		&tls.Config{InsecureSkipVerify: true},
@@ -300,7 +263,6 @@ func TestTLSImpersonate_ChromeDiffersFromDefault(t *testing.T) {
 	require.NotNil(t, defaultHello)
 	require.NotNil(t, chromeHello)
 
-	// Chrome should have more cipher suites than Go's default (includes GREASE + broader set)
 	require.NotEqual(t, defaultHello.CipherSuites, chromeHello.CipherSuites,
 		"Chrome impersonation should produce different cipher suites than default Go TLS")
 }
@@ -353,7 +315,6 @@ func TestTLSImpersonate_EndToEnd_HTTPX(t *testing.T) {
 		wantErr  bool
 	}{
 		{"disabled", "", false},
-		{"random", "random", false},
 		{"chrome", "chrome", false},
 		{"ja3", "771,49195-49196,0-23-65281-10-11-35-16-5-13-18,23-24,0", false},
 	}
