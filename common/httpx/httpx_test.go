@@ -28,3 +28,13 @@ func TestDo(t *testing.T) {
 		require.Greater(t, len(resp.Raw), 800)
 	})
 }
+
+func TestCdnCheckDomainWithoutClient(t *testing.T) {
+	ht := &HTTPX{}
+
+	matched, value, itemType, err := ht.CdnCheckDomain("example.com")
+	require.Error(t, err)
+	require.False(t, matched)
+	require.Empty(t, value)
+	require.Empty(t, itemType)
+}
