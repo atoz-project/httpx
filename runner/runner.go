@@ -30,14 +30,14 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/corona10/goimagehash"
 	"github.com/gocarina/gocsv"
+	"github.com/happyhackingspace/dit"
 	"github.com/mfonda/simhash"
 	asnmap "github.com/projectdiscovery/asnmap/libs"
 	"github.com/projectdiscovery/fastdialer/fastdialer"
+	"github.com/projectdiscovery/httpx/common/authprovider"
 	"github.com/projectdiscovery/httpx/common/customextract"
 	"github.com/projectdiscovery/httpx/common/hashes/jarm"
 	"github.com/projectdiscovery/httpx/common/inputformats"
-	"github.com/happyhackingspace/dit"
-	"github.com/projectdiscovery/httpx/common/authprovider"
 	"github.com/projectdiscovery/httpx/static"
 	"github.com/projectdiscovery/mapcidr/asn"
 	"github.com/projectdiscovery/networkpolicy"
@@ -80,25 +80,25 @@ import (
 
 // Runner is a client for running the enumeration process.
 type Runner struct {
-	seenMux sync.Mutex
-	options            *Options
-	hp                 *httpx.HTTPX
-	wappalyzer         *wappalyzer.Wappalyze
-	cpeDetector        *CPEDetector
-	wpDetector         *WordPressDetector
-	scanopts           ScanOptions
-	hm                 *hybrid.HybridMap
-	excludeCdn         bool
-	stats              clistats.StatisticsClient
-	ratelimiter        ratelimit.Limiter
-	HostErrorsCache    gcache.Cache[string, int]
-	browser            *Browser
-	ditClassifier *dit.Classifier
-	pHashClusters      []pHashCluster
-	simHashes          gcache.Cache[uint64, []string]
-	httpApiEndpoint    *Server
-	authProvider       authprovider.AuthProvider
-	interruptCh        chan struct{}
+	seenMux         sync.Mutex
+	options         *Options
+	hp              *httpx.HTTPX
+	wappalyzer      *wappalyzer.Wappalyze
+	cpeDetector     *CPEDetector
+	wpDetector      *WordPressDetector
+	scanopts        ScanOptions
+	hm              *hybrid.HybridMap
+	excludeCdn      bool
+	stats           clistats.StatisticsClient
+	ratelimiter     ratelimit.Limiter
+	HostErrorsCache gcache.Cache[string, int]
+	browser         *Browser
+	ditClassifier   *dit.Classifier
+	pHashClusters   []pHashCluster
+	simHashes       gcache.Cache[uint64, []string]
+	httpApiEndpoint *Server
+	authProvider    authprovider.AuthProvider
+	interruptCh     chan struct{}
 }
 
 func (r *Runner) HTTPX() *httpx.HTTPX {
@@ -1817,8 +1817,27 @@ func (r *Runner) targets(hp *httpx.HTTPX, target string) chan httpx.Target {
 				results <- httpx.Target{Host: target, CustomIP: ip}
 			}
 		case !stringsutil.HasPrefixAny(target, "http://", "https://") && stringsutil.ContainsAny(target, ","):
-			idxComma := strings.Index(target, ",")
-			results <- httpx.Target{Host: target[idxComma+1:], CustomHost: target[:idxComma]}
+			parts := strings.Split(target, ",")
+
+			switch len(parts) {
+			case 2:
+				firstPart := strings.TrimSpace(parts[0])
+				host := strings.TrimSpace(parts[1])
+
+				if iputil.IsIP(firstPart) {
+					results <- httpx.Target{Host: host, CustomIP: firstPart}
+				} else {
+					results <- httpx.Target{Host: host, CustomHost: firstPart}
+				}
+			case 3:
+				results <- httpx.Target{
+					CustomIP:   strings.TrimSpace(parts[0]),
+					CustomHost: strings.TrimSpace(parts[1]),
+					Host:       strings.TrimSpace(parts[2]),
+				}
+			default:
+				results <- httpx.Target{Host: target}
+			}
 		default:
 			results <- httpx.Target{Host: target}
 		}
@@ -2300,7 +2319,17 @@ retry:
 		_, _ = fmt.Fprintf(builder, " [%s]", cnames[0])
 	}
 
-	isCDN, cdnName, cdnType, err := hp.CdnCheck(ip)
+	var (
+		isCDN   bool
+		cdnName string
+		cdnType string
+	)
+	if onlyHost != "" && !iputil.IsIP(onlyHost) {
+		isCDN, cdnName, cdnType, err = hp.CdnCheckDomain(onlyHost)
+	}
+	if !isCDN {
+		isCDN, cdnName, cdnType, err = hp.CdnCheck(ip)
+	}
 	if scanopts.OutputCDN == "true" && isCDN && err == nil {
 		_, _ = fmt.Fprintf(builder, " [%s]", cdnName)
 	}
@@ -2633,60 +2662,60 @@ retry:
 	}
 
 	result := Result{
-		Timestamp:        time.Now(),
-		Request:          request,
-		LinkRequest:      linkRequest,
-		ResponseHeaders:  responseHeaders,
-		RawHeaders:       rawResponseHeaders,
-		Scheme:           parsed.Scheme,
-		Port:             finalPort,
-		Path:             finalPath,
-		Raw:              resp.Raw,
-		URL:              fullURL,
-		Input:            origInput,
-		ContentLength:    resp.ContentLength,
-		ChainStatusCodes: chainStatusCodes,
-		Chain:            chainItems,
-		StatusCode:       resp.StatusCode,
-		Location:         resp.GetHeaderPart("Location", ";"),
-		ContentType:      resp.GetHeaderPart("Content-Type", ";"),
-		Title:            title,
-		str:              builder.String(),
-		VHost:            isvhost,
-		WebServer:        serverHeader,
-		ResponseBody:     serverResponseRaw,
-		BodyPreview:      bodyPreview,
-		WebSocket:        isWebSocket,
-		TLSData:          resp.TLSData,
-		CSPData:          resp.CSPData,
-		Pipeline:         pipeline,
-		HTTP2:            http2,
-		Method:           method,
-		Host:             parsed.Hostname(),
-		HostIP:           ip,
-		A:                ips4,
-		AAAA:             ips6,
-		CNAMEs:           cnames,
-		CDN:              isCDN,
-		CDNName:          cdnName,
-		CDNType:          cdnType,
-		ResponseTime:     resp.Duration.String(),
-		Technologies:     technologies,
-		FinalURL:         finalURL,
-		FavIconMMH3:      faviconMMH3,
-		FavIconMD5:       faviconMD5,
-		FaviconPath:      faviconPath,
-		FaviconURL:       faviconURL,
-		Hashes:           hashesMap,
-		Extracts:         extractResult,
-		JarmHash:         jarmhash,
-		Lines:            resp.Lines,
-		Words:            resp.Words,
-		ASN:              asnResponse,
-		ExtractRegex:     extractRegex,
-		ScreenshotBytes:  screenshotBytes,
-		HeadlessBody:     headlessBody,
-		KnowledgeBase: r.classifyPage(headlessBody, respData, pHash),
+		Timestamp:         time.Now(),
+		Request:           request,
+		LinkRequest:       linkRequest,
+		ResponseHeaders:   responseHeaders,
+		RawHeaders:        rawResponseHeaders,
+		Scheme:            parsed.Scheme,
+		Port:              finalPort,
+		Path:              finalPath,
+		Raw:               resp.Raw,
+		URL:               fullURL,
+		Input:             origInput,
+		ContentLength:     resp.ContentLength,
+		ChainStatusCodes:  chainStatusCodes,
+		Chain:             chainItems,
+		StatusCode:        resp.StatusCode,
+		Location:          resp.GetHeaderPart("Location", ";"),
+		ContentType:       resp.GetHeaderPart("Content-Type", ";"),
+		Title:             title,
+		str:               builder.String(),
+		VHost:             isvhost,
+		WebServer:         serverHeader,
+		ResponseBody:      serverResponseRaw,
+		BodyPreview:       bodyPreview,
+		WebSocket:         isWebSocket,
+		TLSData:           resp.TLSData,
+		CSPData:           resp.CSPData,
+		Pipeline:          pipeline,
+		HTTP2:             http2,
+		Method:            method,
+		Host:              parsed.Hostname(),
+		HostIP:            ip,
+		A:                 ips4,
+		AAAA:              ips6,
+		CNAMEs:            cnames,
+		CDN:               isCDN,
+		CDNName:           cdnName,
+		CDNType:           cdnType,
+		ResponseTime:      resp.Duration.String(),
+		Technologies:      technologies,
+		FinalURL:          finalURL,
+		FavIconMMH3:       faviconMMH3,
+		FavIconMD5:        faviconMD5,
+		FaviconPath:       faviconPath,
+		FaviconURL:        faviconURL,
+		Hashes:            hashesMap,
+		Extracts:          extractResult,
+		JarmHash:          jarmhash,
+		Lines:             resp.Lines,
+		Words:             resp.Words,
+		ASN:               asnResponse,
+		ExtractRegex:      extractRegex,
+		ScreenshotBytes:   screenshotBytes,
+		HeadlessBody:      headlessBody,
+		KnowledgeBase:     r.classifyPage(headlessBody, respData, pHash),
 		TechnologyDetails: technologyDetails,
 		Resolvers:         resolvers,
 		RequestRaw:        requestDump,

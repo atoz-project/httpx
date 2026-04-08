@@ -47,3 +47,13 @@ func TestDefaultProtocolKeepsRetryableHTTP2FallbackClient(t *testing.T) {
 	require.NotNil(t, ht.client)
 	require.NotSame(t, ht.client.HTTPClient, ht.client.HTTPClient2)
 }
+
+func TestCdnCheckDomainWithoutClient(t *testing.T) {
+	ht := &HTTPX{}
+
+	matched, value, itemType, err := ht.CdnCheckDomain("example.com")
+	require.Error(t, err)
+	require.False(t, matched)
+	require.Empty(t, value)
+	require.Empty(t, itemType)
+}

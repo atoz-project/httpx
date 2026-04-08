@@ -106,6 +106,42 @@ func TestRunner_domain_targets(t *testing.T) {
 	require.ElementsMatch(t, expected, got, "could not expected output")
 }
 
+func TestRunner_commaSeparated_targets_supportCustomIP(t *testing.T) {
+	options := &Options{}
+	r, err := New(options)
+	require.Nil(t, err, "could not create httpx runner")
+
+	input := []string{
+		"1.1.1.1,one.one.one.one",
+		"1.1.1.1,example.com,one.one.one.one",
+		"example.com,one.one.one.one",
+	}
+	expected := []httpx.Target{
+		{
+			Host:     "one.one.one.one",
+			CustomIP: "1.1.1.1",
+		},
+		{
+			Host:       "one.one.one.one",
+			CustomIP:   "1.1.1.1",
+			CustomHost: "example.com",
+		},
+		{
+			Host:       "one.one.one.one",
+			CustomHost: "example.com",
+		},
+	}
+
+	got := []httpx.Target{}
+	for _, inp := range input {
+		for target := range r.targets(r.hp, inp) {
+			got = append(got, target)
+		}
+	}
+
+	require.ElementsMatch(t, expected, got, "could not expected output")
+}
+
 func TestRunner_probeall_targets(t *testing.T) {
 	options := &Options{
 		ProbeAllIPS: true,
